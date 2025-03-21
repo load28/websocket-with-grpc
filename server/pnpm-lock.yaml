@@ -14,6 +14,9 @@ importers:
       '@grpc/proto-loader':
         specifier: ^0.7.8
         version: 0.7.13
+      protobufjs:
+        specifier: ^7.2.4
+        version: 7.4.0
       ws:
         specifier: ^8.13.0
         version: 8.18.1

@@ -53,7 +53,7 @@ grpc-websocket-project/
 
 2. **응답 형식**:
    - 첫 번째 바이트: 응답 타입 (1: 사용자 정보, 2: 사용자 목록, 255: 오류)
-   - 나머지 바이트: JSON 형식의 응답 데이터 (바이너리로 인코딩됨)
+   - 나머지 바이트: Protocol Buffers로 직렬화된 응답 데이터
 
 ## 설치 및 실행
 
@@ -83,6 +83,6 @@ npm start
 
 ## 기술 스택
 
-- **서버**: Node.js, TypeScript, gRPC, WebSocket
-- **클라이언트**: React, TypeScript, WebSocket API
+- **서버**: Node.js, TypeScript, gRPC, WebSocket, Protocol Buffers
+- **클라이언트**: React, TypeScript, WebSocket API, Protocol Buffers
 - **통신**: 바이너리 데이터 형식, Protocol Buffers
