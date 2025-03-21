@@ -9,7 +9,6 @@ export interface User {
   role: string;
 }
 
-// WebSocket 상태 타입
 export enum WebSocketStatus {
   CONNECTING = "connecting",
   OPEN = "open",
@@ -17,7 +16,6 @@ export enum WebSocketStatus {
   CLOSED = "closed",
 }
 
-// WebSocket 클라이언트 클래스
 export class WebSocketClient {
   private socket: WebSocket | null = null;
   private static instance: WebSocketClient | null = null;
@@ -26,13 +24,12 @@ export class WebSocketClient {
   private protoRoot: protobuf.Root | null = null;
   private protoLoaded: boolean = false;
   private protoLoading: Promise<void> | null = null;
+  private status: WebSocketStatus = WebSocketStatus.CLOSED;
 
   private constructor(private url: string = "ws://localhost:8080") {
-    // Proto 정의 로드
     this.loadProtoDefinitions();
   }
 
-  // 싱글톤 인스턴스 가져오기
   public static getInstance(): WebSocketClient {
     if (!WebSocketClient.instance) {
       WebSocketClient.instance = new WebSocketClient();
@@ -40,7 +37,6 @@ export class WebSocketClient {
     return WebSocketClient.instance;
   }
 
-  // Proto 정의 로드
   private async loadProtoDefinitions(): Promise<void> {
     if (this.protoLoaded || this.protoLoading) {
       return;
@@ -69,9 +65,7 @@ export class WebSocketClient {
     return this.protoLoading;
   }
 
-  // WebSocket 연결
   public async connect(): Promise<void> {
-    // Proto 정의 로드 시도
     try {
       await this.loadProtoDefinitions();
     } catch (error) {
@@ -114,7 +108,6 @@ export class WebSocketClient {
     });
   }
 
-  // 연결 종료
   public disconnect(): void {
     if (this.socket) {
       this.notifyStatusChange(WebSocketStatus.CLOSING);
@@ -123,12 +116,15 @@ export class WebSocketClient {
     }
   }
 
-  // 상태 변경 알림
   private notifyStatusChange(status: WebSocketStatus): void {
+    this.status = status;
     this.statusListeners.forEach((listener) => listener(status));
   }
 
-  // 상태 리스너 추가
+  public getStatus(): string {
+    return this.status;
+  }
+
   public addStatusListener(
     listener: (status: WebSocketStatus) => void
   ): () => void {
@@ -138,7 +134,6 @@ export class WebSocketClient {
     };
   }
 
-  // Protocol Buffers 메시지 역직렬화 함수
   private deserializeMessage(buffer: Uint8Array, messageType: string): any {
     try {
       if (!this.protoRoot) {
@@ -146,7 +141,6 @@ export class WebSocketClient {
         return JSON.parse(new TextDecoder().decode(buffer));
       }
 
-      // 메시지 타입 조회
       const MessageType = this.protoRoot.lookupType("user." + messageType);
       if (!MessageType) {
         console.warn(
@@ -177,7 +171,6 @@ export class WebSocketClient {
     }
   }
 
-  // 특정 사용자 조회
   public getUserById(userId: string): Promise<User> {
     return new Promise((resolve, reject) => {
       if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
@@ -185,7 +178,6 @@ export class WebSocketClient {
         return;
       }
 
-      // 바이너리 요청 데이터 생성 (타입 1 = GetUser)
       const requestType = new Uint8Array([1]);
       const userIdBytes = new TextEncoder().encode(userId);
       const requestData = new Uint8Array(
@@ -194,17 +186,14 @@ export class WebSocketClient {
       requestData.set(requestType);
       requestData.set(userIdBytes, requestType.length);
 
-      // 콜백 등록
       this.messageCallbacks.set(1, (data) => {
         resolve(data as User);
       });
 
-      // 요청 전송
       this.socket.send(requestData);
     });
   }
 
-  // 모든 사용자 조회
   public getAllUsers(): Promise<User[]> {
     return new Promise((resolve, reject) => {
       if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
@@ -212,10 +201,8 @@ export class WebSocketClient {
         return;
       }
 
-      // 바이너리 요청 데이터 생성 (타입 2 = ListUsers)
       const requestData = new Uint8Array([2]);
 
-      // 콜백 등록
       this.messageCallbacks.set(2, (data) => {
         if (data && data.users) {
           resolve(data.users as User[]);
@@ -225,18 +212,14 @@ export class WebSocketClient {
         }
       });
 
-      // 요청 전송
       this.socket.send(requestData);
     });
   }
 
-  // 메시지 핸들러
   private handleMessage(event: MessageEvent): void {
     try {
-      // 바이너리 응답 처리
       const data = event.data;
 
-      // ArrayBuffer 확인
       if (!(data instanceof ArrayBuffer)) {
         console.error("예상하지 못한 데이터 타입:", typeof data);
         return;
@@ -244,7 +227,6 @@ export class WebSocketClient {
 
       const buffer = new Uint8Array(data);
 
-      // 버퍼가 비어있는지 확인
       if (buffer.length === 0) {
         console.warn("빈 메시지를 받았습니다.");
         return;
@@ -254,15 +236,12 @@ export class WebSocketClient {
       console.log("원시 바이너리 데이터:", buffer);
       console.log("바이너리 데이터 길이:", buffer.length);
 
-      // 응답 타입 읽기
       const responseType = buffer[0];
 
-      // 응답 데이터 파싱
       const responseData = buffer.slice(1);
 
       let parsedData: any;
 
-      // 응답 타입에 따라 적절한 메시지 타입으로 역직렬화
       switch (responseType) {
         case 1: // User 응답
           parsedData = this.deserializeMessage(responseData, "User");
@@ -271,7 +250,6 @@ export class WebSocketClient {
           parsedData = this.deserializeMessage(responseData, "UserList");
           break;
         case 255: // 에러 응답
-          // 에러는 JSON으로 처리
           const decodedData = new TextDecoder().decode(responseData);
           parsedData = JSON.parse(decodedData);
           console.error("서버 오류:", parsedData.error);
@@ -283,11 +261,9 @@ export class WebSocketClient {
 
       console.log("파싱된 데이터:", parsedData);
 
-      // 등록된 콜백 호출
       const callback = this.messageCallbacks.get(responseType);
       if (callback) {
         callback(parsedData);
-        // 일회성 콜백 제거
         this.messageCallbacks.delete(responseType);
       } else {
         console.warn(`응답 타입 ${responseType}에 대한 콜백이 없습니다`);
@@ -298,5 +274,4 @@ export class WebSocketClient {
   }
 }
 
-// 간편한 사용을 위한 기본 내보내기
 export default WebSocketClient.getInstance();
