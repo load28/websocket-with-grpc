@@ -25,6 +25,7 @@ export class WebSocketClient {
   private protoLoaded: boolean = false;
   private protoLoading: Promise<void> | null = null;
   private status: WebSocketStatus = WebSocketStatus.CLOSED;
+  private connectionPromise: Promise<void> | null = null;
 
   private constructor(private url: string = "ws://localhost:8080") {
     this.loadProtoDefinitions();
@@ -66,6 +67,15 @@ export class WebSocketClient {
   }
 
   public async connect(): Promise<void> {
+    if (this.connectionPromise) {
+      return this.connectionPromise;
+    }
+
+    this.connectionPromise = this._connect();
+    return this.connectionPromise;
+  }
+
+  private async _connect(): Promise<void> {
     try {
       await this.loadProtoDefinitions();
     } catch (error) {
@@ -73,11 +83,7 @@ export class WebSocketClient {
     }
 
     return new Promise((resolve, reject) => {
-      if (
-        this.socket &&
-        (this.socket.readyState === WebSocket.OPEN ||
-          this.socket.readyState === WebSocket.CONNECTING)
-      ) {
+      if (this.socket && this.socket.readyState === WebSocket.OPEN) {
         this.notifyStatusChange(WebSocketStatus.OPEN);
         resolve();
         return;
@@ -97,10 +103,12 @@ export class WebSocketClient {
       this.socket.onclose = () => {
         console.log("WebSocket 연결이 닫혔습니다");
         this.notifyStatusChange(WebSocketStatus.CLOSED);
+        this.connectionPromise = null;
       };
 
       this.socket.onerror = (error) => {
         console.error("WebSocket 오류:", error);
+        this.connectionPromise = null;
         reject(error);
       };
 
